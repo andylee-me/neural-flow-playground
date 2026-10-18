@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Neural Flow Playground</title>
+<style>
+:root{--bg:#0a0e17;--panel:#111827;--card:#1a2235;--border:#2a3550;--accent:#4f8ef7;--green:#34d058;--red:#f0565a;--yellow:#e3a528;--orange:#f5a623;--text:#d4dce8;--muted:#6b7a99}
+*{box-sizing:border-box;margin:0;padding:0}
+body{height:100vh;overflow:hidden;background:var(--bg);color:var(--text);font:13px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,select{font:inherit;cursor:pointer}
+
+/* HEADER */
+header{height:48px;display:flex;align-items:center;gap:12px;padding:0 18px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-icon{width:26px;height:26px;display:grid;place-items:center;border-radius:7px;background:linear-gradient(135deg,var(--accent),#8a5cf6)}
+h1{font-size:14px;font-weight:600}
+.badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px}
+.badge-stopped{color:var(--muted);border:1px solid var(--border)}
+.badge-training{color:var(--green);border:1px solid rgba(52,208,88,.3);background:rgba(52,208,88,.12)}
+.status-dot{display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%;background:var(--muted)}
+.badge-training .status-dot{background:var(--green);box-shadow:0 0 6px var(--green)}
+
+/* 3-COLUMN LAYOUT */
+.layout{height:calc(100vh - 48px);display:grid;grid-template-columns:210px minmax(0,1fr) 210px;overflow:hidden}
+
+/* SIDE PANELS */
+.panel{overflow-y:auto;overflow-x:hidden;background:var(--panel)}
+.panel::-webkit-scrollbar{width:3px}
+.panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.left{border-right:1px solid var(--border)}
+.right-panel{border-left:1px solid var(--border)}
+
+.model-strip{height:29px;padding:0 12px;display:flex;align-items:center;font-size:9px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;flex-shrink:0}
+.model-strip.a{color:var(--accent);background:rgba(79,142,247,.1);border-bottom:1px solid rgba(79,142,247,.28)}
+.model-strip.b{color:var(--orange);background:rgba(245,166,35,.1);border-bottom:1px solid rgba(245,166,35,.28)}
+
+.p-section{padding:11px 11px 12px;border-bottom:1px solid var(--border)}
+.p-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+
+/* ARCH GRID */
+.arch-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 7px}
+.arch-cell{display:flex;flex-direction:column;gap:4px}
+.arch-cell-label{color:var(--muted);font-size:9px;font-weight:700;text-transform:uppercase}
+.stepper{height:27px;display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.stepper-btn{width:24px;border:0;background:var(--card);color:var(--text);font-size:15px;transition:background .1s}
+.stepper-btn:hover{background:var(--border)}
+.stepper-num{flex:1;display:grid;place-items:center;background:var(--bg);border-left:1px solid var(--border);border-right:1px solid var(--border);font:700 13px monospace}
+.param-select{width:100%;height:27px;padding:3px 6px;color:var(--text);background:var(--card);border:1px solid var(--border);border-radius:6px;font-size:10px}
+.mini-action{padding:3px 8px;color:var(--accent);background:rgba(79,142,247,.1);border:1px solid rgba(79,142,247,.3);border-radius:5px;font-size:10px;font-weight:700}
+.mini-action.orange{color:var(--orange);background:rgba(245,166,35,.1);border-color:rgba(245,166,35,.3)}
+.auto-toast{display:none;margin:-2px 0 9px;padding:6px;color:var(--accent);background:rgba(79,142,247,.1);border:1px solid rgba(79,142,247,.3);border-radius:6px;font-size:9px;line-height:1.4}
+.right-panel .auto-toast{color:var(--orange);background:rgba(245,166,35,.08);border-color:rgba(245,166,35,.3)}
+
+/* TRAINING BUTTONS */
+.ctrl-btns{display:flex;flex-direction:column;gap:6px}
+.ctrl-btn{width:100%;padding:7px 8px;border-radius:7px;font-size:11px;font-weight:700}
+.ctrl-btn:disabled{opacity:.35;cursor:not-allowed}
+.btn-train{color:#fff;background:linear-gradient(135deg,#2d6af5,#4f8ef7);border:1px solid var(--accent);box-shadow:0 2px 10px rgba(79,142,247,.25)}
+.btn-stop,.btn-step,.btn-secondary,.btn-best{color:var(--text);background:var(--card);border:1px solid var(--border)}
+.btn-best:not(:disabled){color:var(--yellow);border-color:rgba(227,165,40,.4);background:rgba(227,165,40,.06)}
+.btn-best-b:not(:disabled){color:var(--orange);border-color:rgba(245,166,35,.4);background:rgba(245,166,35,.06)}
+.btn-row-2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.speed-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.speed-label{color:var(--muted);font-size:10px;flex-shrink:0;width:40px}
+
+/* ── DATASET BAR (shared, top of center) ─────────────────── */
+.dataset-bar{
+  height:54px;display:flex;align-items:center;gap:0;
+  padding:0 10px;background:var(--panel);
+  border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.ds-btn-row{display:flex;gap:5px;align-items:center}
+.ds-btn{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:5px 9px;color:var(--text);background:var(--card);
+  border:1px solid var(--border);border-radius:7px;transition:all .12s;
+  min-width:52px;
+}
+.ds-btn:hover{border-color:var(--accent);background:rgba(79,142,247,.1)}
+.ds-icon{font-size:15px;line-height:1}
+.ds-label{font-size:9px;color:var(--muted);font-weight:600;white-space:nowrap}
+.ds-btn:hover .ds-label{color:var(--text)}
+
+.bar-divider{width:1px;height:30px;background:var(--border);margin:0 8px;flex-shrink:0}
+
+.noise-section{display:flex;align-items:center;gap:7px}
+.noise-label{color:var(--muted);font-size:10px;white-space:nowrap}
+.noise-slider{width:80px;accent-color:var(--accent)}
+.noise-val{min-width:26px;color:var(--text);font:600 10px monospace}
+
+.btn-clear-sm{
+  padding:4px 9px;color:rgba(240,86,90,.75);background:transparent;
+  border:1px dashed rgba(240,86,90,.35);border-radius:6px;font-size:10px;font-weight:600;
+  transition:all .12s;white-space:nowrap;
+}
+.btn-clear-sm:hover{background:rgba(240,86,90,.08);border-color:var(--red);color:var(--red)}
+
+.hint-dots{display:flex;gap:10px;font-size:9px;color:var(--muted);align-items:center}
+.hint-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:middle}
+
+/* sync button in bar */
+.btn-sync{
+  padding:5px 11px;color:var(--accent);background:rgba(79,142,247,.1);
+  border:1px solid rgba(79,142,247,.3);border-radius:7px;
+  font-size:10px;font-weight:700;white-space:nowrap;transition:all .12s;
+}
+.btn-sync:hover{background:rgba(79,142,247,.18);border-color:var(--accent)}
+.btn-sync.rev{color:var(--orange);background:rgba(245,166,35,.1);border-color:rgba(245,166,35,.3)}
+.btn-sync.rev:hover{background:rgba(245,166,35,.18);border-color:var(--orange)}
+
+/* CENTER */
+.center{min-width:0;min-height:0;display:flex;flex-direction:column}
+
+.model-columns{min-height:0;flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 8px 0}
+.model-column{min-width:0;min-height:0;display:flex;flex-direction:column}
+.model-badge-strip{height:29px;display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--panel);border:1px solid var(--border);border-bottom:0;border-radius:8px 8px 0 0}
+.model-badge{padding:2px 6px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:.8px}
+.model-badge.a{color:var(--accent);background:rgba(79,142,247,.14);border:1px solid rgba(79,142,247,.35)}
+.model-badge.b{color:var(--orange);background:rgba(245,166,35,.14);border:1px solid rgba(245,166,35,.35)}
+.arch-display-text{color:var(--muted);font:11px monospace}
+
+.metrics-bar{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--border);border-bottom:0;background:var(--panel)}
+.metric-card{min-width:0;padding:5px 7px;border-right:1px solid var(--border)}
+.metric-card:last-child{border:0}
+.metric-label{display:block;color:var(--muted);font-size:8px;font-weight:800;text-transform:uppercase;overflow:hidden;white-space:nowrap}
+.metric-val{display:block;margin-top:2px;color:#e8edf5;font:700 13px/1.1 monospace}
+.metric-val.blue{color:var(--accent)}.metric-val.green{color:var(--green)}.metric-val.orange{color:var(--orange)}.metric-val.purple{color:#a779ff}
+
+.canvas-frame{min-height:0;flex:1;position:relative;overflow:hidden;background:#050810;border:1px solid var(--border)}
+.canvas-frame canvas{display:block;width:100%;height:100%;cursor:crosshair}
+.canvas-tag{position:absolute;top:9px;left:10px;color:rgba(255,255,255,.22);font-size:9px;font-weight:700;letter-spacing:.8px;pointer-events:none}
+
+.loss-frame{height:115px;min-height:115px;display:flex;margin-bottom:8px;background:var(--panel);border:1px solid var(--border);border-top:0;border-radius:0 0 8px 8px;overflow:hidden}
+.loss-y-axis{width:30px;display:flex;flex-direction:column;justify-content:space-between;padding:8px 4px;border-right:1px solid var(--border)}
+.loss-y-label{color:var(--muted);font:8px monospace;text-align:right}
+.loss-canvas-wrap{position:relative;flex:1;overflow:hidden}
+.loss-canvas-wrap canvas{display:block;width:100%;height:100%}
+.loss-tag{position:absolute;top:6px;left:6px;color:rgba(52,208,88,.42);font-size:8px;font-weight:700;letter-spacing:.7px}
+.loss-tag-b{color:rgba(245,166,35,.52)}
+.loss-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;pointer-events:none}
+
+/* right panel extras */
+.btn-full{width:100%;margin-top:8px;padding:7px 8px;border-radius:7px;font-size:11px;font-weight:700}
+.sync-row{display:flex;gap:6px;margin-top:8px}
+.sync-row button{flex:1;padding:6px 4px;border-radius:6px;font-size:10px;font-weight:700;background:var(--card);border:1px solid var(--border);color:var(--muted)}
+.sync-row button:hover{color:var(--text);border-color:var(--border2)}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <h1>Neural Flow Playground</h1>
+  </div>
+  <span class="badge badge-stopped" id="statusBadge"><span class="status-dot"></span>Stopped</span>
+</header>
+
+<div class="layout">
+
+<!-- ═══ LEFT PANEL: Model A Architecture + Training ═══ -->
+<aside class="panel left">
+  <div class="model-strip a">◆ MODEL A</div>
+
+  <!-- Architecture A -->
+  <div class="p-section">
+    <div class="p-title">Architecture <button class="mini-action" onclick="autoSetParams('a')">✨ Auto</button></div>
+    <div id="autoToastA" class="auto-toast"></div>
+    <div class="arch-grid">
+      <div class="arch-cell">
+        <span class="arch-cell-label">Layers</span>
+        <div class="stepper">
+          <button class="stepper-btn" onclick="stepValue('layersVal',-1,1,4)">−</button>
+          <span class="stepper-num" id="layersVal">2</span>
+          <button class="stepper-btn" onclick="stepValue('layersVal',1,1,4)">+</button>
+        </div>
+      </div>
+      <div class="arch-cell">
+        <span class="arch-cell-label">Neurons</span>
+        <div class="stepper">
+          <button class="stepper-btn" onclick="stepValue('neuronsVal',-1,1,8)">−</button>
+          <span class="stepper-num" id="neuronsVal">4</span>
+          <button class="stepper-btn" onclick="stepValue('neuronsVal',1,1,8)">+</button>
+        </div>
+      </div>
+      <div class="arch-cell">
+        <span class="arch-cell-label">Activation</span>
+        <select class="param-select" id="activationSelect" onchange="onModelChange()">
+          <option value="relu">ReLU</option>
+          <option value="sigmoid">Sigmoid</option>
+          <option value="tanh">Tanh</option>
+        </select>
+      </div>
+      <div class="arch-cell">
+        <span class="arch-cell-label">LR</span>
+        <select class="param-select" id="lrSelect">
+          <option value="0.001">0.001</option>
+          <option value="0.005">0.005</option>
+          <option value="0.01" selected>0.01</option>
+          <option value="0.1">0.1</option>
+          <option value="1.0">1.0</option>
+        </select>
+      </div>
+      <div class="arch-cell">
+        <span class="arch-cell-label">Optimizer</span>
+        <select class="param-select" id="optimizerSelect" onchange="onModelChange()">
+          <option value="sgd">SGD</option>
+          <option value="momentum">Momentum</option>
+          <option value="adam">Adam</option>
+        </select>
+      </div>
+      <div class="arch-cell">
+        <span class="arch-cell-label">Batch</span>
+        <select class="param-select" id="batchSelect">
+          <option value="1">1</option>
+          <option value="8">8</option>
+          <option value="16">16</option>
+          <option value="32">32</option>
+          <option value="all" selected>All</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Training (shared controls) -->
+  <div class="p-section">
+    <div class="p-title">Training</div>
+    <div class="speed-row">
+      <span class="speed-label">Speed</span>
+      <select class="param-select" id="speedSelect">
+        <option value="1">Slow</option>
+        <option value="10" selected>Normal</option>
+        <option value="50">Fast</option>
+      </select>
+    </div>
+    <div class="ctrl-btns">
+      <button class="ctrl-btn btn-train" id="trainBtn" onclick="startTraining()">▶ Train Both</button>
+      <button class="ctrl-btn btn-stop" id="stopBtn" onclick="stopTraining()" disabled>■ Stop</button>
+      <button class="ctrl-btn btn-step" id="stepBtn" onclick="stepOnce()">▶| Step</button>
+      <div class="btn-row-2">
+        <button class="ctrl-btn btn-secondary" onclick="resetWeights()">↻ Reset</button>
+        <button class="ctrl-btn btn-best" id="loadBestBtn" onclick="loadBestWeights()" disabled>★ Best A</button>
+      </div>
+    </div>
+  </div>
+
+</aside>
+
+<!-- ═══ CENTER: Dataset Bar + Two Canvas Columns ═══ -->
+<main class="center">
+
+  <!-- SHARED DATASET BAR -->
+  <div class="dataset-bar">
+    <!-- Dataset preset buttons -->
+    <div class="ds-btn-row">
+      <button class="ds-btn" onclick="loadDataset('linear')">
+        <span class="ds-icon">▰</span><span class="ds-label">Linear</span>
+      </button>
+      <button class="ds-btn" onclick="loadDataset('circle')">
+        <span class="ds-icon">◉</span><span class="ds-label">Circles</span>
+      </button>
+      <button class="ds-btn" onclick="loadDataset('spiral')">
+        <span class="ds-icon">〰</span><span class="ds-label">Spiral</span>
+      </button>
+    </div>
+
+    <div class="bar-divider"></div>
+
+    <!-- Noise -->
+    <div class="noise-section">
+      <span class="noise-label">Noise</span>
+      <input type="range" class="noise-slider" id="noiseSlider" min="0" max="50" value="10" oninput="onNoiseChange()">
+      <span class="noise-val" id="noiseVal">10%</span>
+    </div>
+
+    <div class="bar-divider"></div>
+
+    <!-- Hints + Clear -->
+    <div class="hint-dots">
+      <span><span class="hint-dot" style="background:#f0565a"></span>Class 0</span>
+      <span><span class="hint-dot" style="background:#4f8ef7"></span>Class 1</span>
+    </div>
+    <button class="btn-clear-sm" onclick="clearData()">✕ Clear</button>
+
+    <div class="bar-divider"></div>
+
+    <!-- Sync button — Copy A params to B -->
+    <button class="btn-sync" onclick="syncBtoA()" title="Copy Model A settings to Model B">Copy A → B</button>
+  </div>
+
+  <!-- Canvas columns -->
+  <div class="model-columns">
+
+    <!-- Model A Column -->
+    <div class="model-column">
+      <div class="model-badge-strip">
+        <span class="model-badge a">MODEL A</span>
+        <span class="arch-display-text" id="archDisplayA">2→4→4→1</span>
+      </div>
+      <div class="metrics-bar">
+        <div class="metric-card"><span class="metric-label">Epoch</span><span class="metric-val blue" id="epochDisplay">—</span></div>
+        <div class="metric-card"><span class="metric-label">Loss</span><span class="metric-val" id="lossDisplay">—</span></div>
+        <div class="metric-card"><span class="metric-label">Best</span><span class="metric-val green" id="bestLossBar">—</span></div>
+        <div class="metric-card"><span class="metric-label">Acc</span><span class="metric-val purple" id="accuracyDisplay">—</span></div>
+      </div>
+      <div class="canvas-frame" id="canvasContainer">
+        <canvas id="mainCanvas"></canvas>
+        <span class="canvas-tag">Decision Boundary A</span>
+      </div>
+      <div class="loss-frame">
+        <div class="loss-y-axis">
+          <span class="loss-y-label">1.0</span><span class="loss-y-label">.75</span>
+          <span class="loss-y-label">.5</span><span class="loss-y-label">.25</span>
+          <span class="loss-y-label">0.0</span>
+        </div>
+        <div class="loss-canvas-wrap" id="lossCanvasWrap">
+          <canvas id="lossCanvas"></canvas>
+          <span class="loss-tag">Loss A</span>
+          <div class="loss-placeholder" id="lossPlaceholder">Press Train to begin</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model B Column -->
+    <div class="model-column">
+      <div class="model-badge-strip">
+        <span class="model-badge b">MODEL B</span>
+        <span class="arch-display-text" id="archDisplayB">2→4→4→1</span>
+      </div>
+      <div class="metrics-bar">
+        <div class="metric-card"><span class="metric-label">Epoch</span><span class="metric-val blue" id="epochDisplayB">—</span></div>
+        <div class="metric-card"><span class="metric-label">Loss</span><span class="metric-val" id="lossDisplayB">—</span></div>
+        <div class="metric-card"><span class="metric-label">Best</span><span class="metric-val orange" id="bestLossBarB">—</span></div>
+        <div class="metric-card"><span class="metric-label">Acc</span><span class="metric-val purple" id="accuracyDisplayB">—</span></div>
+      </div>
+      <div class="canvas-frame" id="canvasContainerB">
+        <canvas id="mainCanvasB"></canvas>
+        <span class="canvas-tag">Decision Boundary B</span>
+      </div>
+      <div class="loss-frame">
+        <div class="loss-y-axis">
+          <span class="loss-y-label">1.0</span><span class="loss-y-label">.75</span>
+          <span class="loss-y-label">.5</span><span class="loss-y-label">.25</span>
+          <span class="loss-y-label">0.0</span>
+        </div>
+        <div class="loss-canvas-wrap" id="lossCanvasWrapB">
+          <canvas id="lossCanvasB"></canvas>
+          <span class="loss-tag loss-tag-b">Loss B</span>
+          <div class="loss-placeholder" id="lossPlaceholderB">Press Train to begin</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /model-columns -->
+</main>
+
+<!-- ═══ RIGHT PANEL: Model B Architecture ═══ -->
+<aside class="panel right-panel">
+  <div class="model-strip b">◆ MODEL B</div>
+
+  <!-- Architecture B -->
+  <div class="p-section">
+    <div class="p-title">Architecture <button class="mini-action orange" onclick="autoSetParams('b')">✨ Auto</button></div>
+    <div id="autoToastB" class="auto-toast"></div>
+    <div class="arch-grid">
+      <div class="arch-cell">
+        <span class="arch-cell-label">Layers</span>
+        <div class="stepper">
+          <button class="stepper-btn" onclick="stepValueB('layersValB',-1,1,4)">−</button>
+          <span class="stepper-num" id="layersValB">2</span>
+          <button class="stepper-btn" onclick="stepValueB('layersValB',1,1,4)">+</button>
+        </div>
+      </div>
+      <div class="arch-cell">
+        <span class="arch-cell-label">Neurons</span>
+        <div class="stepper">
+          <button class="stepper-btn" onclick="stepValueB('neuronsValB',-1,1,8)">−</button>
+          <span class="stepper-num" id="neuronsValB">4</span>
+          <button class="stepper-btn" onclick="stepValueB('neuronsValB',1,1,8)">+</button>
+        </div>
+      </div>
+      <div class="arch-cell">
+        <span class="arch-cell-label">Activation</span>
+        <select class="param-select" id="activationSelectB" onchange="buildNetworkB()">
+          <option value="relu">ReLU</option>
+          <option value="sigmoid">Sigmoid</option>
+          <option value="tanh">Tanh</option>
+        </select>
+      </div>
+      <div class="arch-cell">
+        <span class="arch-cell-label">LR</span>
+        <select class="param-select" id="lrSelectB">
+          <option value="0.001">0.001</option>
+          <option value="0.005">0.005</option>
+          <option value="0.01" selected>0.01</option>
+          <option value="0.1">0.1</option>
+          <option value="1.0">1.0</option>
+        </select>
+      </div>
+      <div class="arch-cell">
+        <span class="arch-cell-label">Optimizer</span>
+        <select class="param-select" id="optimizerSelectB" onchange="buildNetworkB()">
+          <option value="sgd">SGD</option>
+          <option value="momentum">Momentum</option>
+          <option value="adam">Adam</option>
+        </select>
+      </div>
+      <div class="arch-cell">
+        <span class="arch-cell-label">Batch</span>
+        <select class="param-select" id="batchSelectB">
+          <option value="1">1</option>
+          <option value="8">8</option>
+          <option value="16">16</option>
+          <option value="32">32</option>
+          <option value="all" selected>All</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls B -->
+  <div class="p-section">
+    <div class="p-title">Controls B</div>
+    <button class="ctrl-btn btn-best btn-best-b btn-full" id="loadBestBtnB" onclick="loadBestWeightsB()" disabled>★ Load Best B</button>
+    <div class="sync-row">
+      <button onclick="syncBtoA()" title="Copy A settings to B">A → B</button>
+      <button onclick="syncAtoB()" title="Copy B settings to A">B → A</button>
+    </div>
+  </div>
+
+</aside>
+
+</div><!-- /layout -->
+
+<script>
+// ── Math utils ──────────────────────────────────────────────
+function sigmoid(x){const xc=Math.max(-500,Math.min(500,x));return 1/(1+Math.exp(-xc));}
+function sigmoidDeriv(x){const s=sigmoid(x);return s*(1-s);}
+function relu(x){return Math.max(0,x);}
+function reluDeriv(x){return x>0?1:0;}
+function tanhAct(x){return Math.tanh(x);}
+function tanhDeriv(x){const t=Math.tanh(x);return 1-t*t;}
+function randn(){let u=0,v=0;while(u===0)u=Math.random();while(v===0)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+// ── MLP ─────────────────────────────────────────────────────
+class MLP{
+  constructor(layerSizes,activation,optimizer){
+    this.layerSizes=layerSizes;this.activationName=activation;
+    this.optimizer=optimizer||'sgd';this.setActivation(activation);
+    this.weights=[];this.biases=[];this.activations=[];this.zValues=[];this.t=0;this.initWeights();
+  }
+  setActivation(name){
+    this.activationName=name;
+    if(name==='relu'){this.act=relu;this.actDeriv=reluDeriv;}
+    else if(name==='sigmoid'){this.act=sigmoid;this.actDeriv=sigmoidDeriv;}
+    else{this.act=tanhAct;this.actDeriv=tanhDeriv;}
+  }
+  initWeights(){
+    this.weights=[];this.biases=[];this.vel_w=[];this.vel_b=[];this.m2_w=[];this.m2_b=[];this.t=0;
+    for(let l=0;l<this.layerSizes.length-1;l++){
+      const fi=this.layerSizes[l],fo=this.layerSizes[l+1],isLast=l===this.layerSizes.length-2;
+      const sc=this.activationName==='relu'&&!isLast?Math.sqrt(2/fi):Math.sqrt(1/fi);
+      const W=Array.from({length:fo},()=>Array.from({length:fi},()=>randn()*sc));
+      this.weights.push(W);this.biases.push(new Array(fo).fill(0));
+      this.vel_w.push(Array.from({length:fo},()=>new Array(fi).fill(0)));
+      this.vel_b.push(new Array(fo).fill(0));
+      this.m2_w.push(Array.from({length:fo},()=>new Array(fi).fill(0)));
+      this.m2_b.push(new Array(fo).fill(0));
+    }
+  }
+  forward(input){
+    this.activations=[input];this.zValues=[];let cur=input;
+    for(let l=0;l<this.weights.length;l++){
+      const isLast=l===this.weights.length-1;
+      const z=this.weights[l].map((row,j)=>row.reduce((s,w,k)=>s+w*cur[k],this.biases[l][j]));
+      const a=isLast?z.map(v=>sigmoid(v)):z.map(v=>this.act(v));
+      this.zValues.push(z);this.activations.push(a);cur=a;
+    }
+    return cur[0];
+  }
+  applyUpdate(l,j,k,g,lr){
+    const opt=this.optimizer;
+    if(opt==='sgd')this.weights[l][j][k]-=lr*g;
+    else if(opt==='momentum'){this.vel_w[l][j][k]=.9*this.vel_w[l][j][k]+g;this.weights[l][j][k]-=lr*this.vel_w[l][j][k];}
+    else{const b1=.9,b2=.999,eps=1e-8;this.vel_w[l][j][k]=b1*this.vel_w[l][j][k]+(1-b1)*g;this.m2_w[l][j][k]=b2*this.m2_w[l][j][k]+(1-b2)*g*g;const m1=this.vel_w[l][j][k]/(1-Math.pow(b1,this.t)),m2=this.m2_w[l][j][k]/(1-Math.pow(b2,this.t));this.weights[l][j][k]-=lr*m1/(Math.sqrt(m2)+eps);}
+  }
+  applyUpdateBias(l,j,g,lr){
+    const opt=this.optimizer;
+    if(opt==='sgd')this.biases[l][j]-=lr*g;
+    else if(opt==='momentum'){this.vel_b[l][j]=.9*this.vel_b[l][j]+g;this.biases[l][j]-=lr*this.vel_b[l][j];}
+    else{const b1=.9,b2=.999,eps=1e-8;this.vel_b[l][j]=b1*this.vel_b[l][j]+(1-b1)*g;this.m2_b[l][j]=b2*this.m2_b[l][j]+(1-b2)*g*g;const m1=this.vel_b[l][j]/(1-Math.pow(b1,this.t)),m2=this.m2_b[l][j]/(1-Math.pow(b2,this.t));this.biases[l][j]-=lr*m1/(Math.sqrt(m2)+eps);}
+  }
+  backward(target,lr){
+    this.t+=1;const nL=this.weights.length,output=this.activations[nL][0];
+    let delta=[output-target];
+    for(let l=nL-1;l>=0;l--){
+      const aPrev=this.activations[l];
+      delta=delta.map(d=>Math.max(-5,Math.min(5,d)));
+      for(let j=0;j<delta.length;j++){
+        for(let k=0;k<aPrev.length;k++)this.applyUpdate(l,j,k,delta[j]*aPrev[k],lr);
+        this.applyUpdateBias(l,j,delta[j],lr);
+      }
+      if(l>0){
+        const nd=new Array(this.layerSizes[l]).fill(0);
+        for(let j=0;j<delta.length;j++)for(let k=0;k<this.layerSizes[l];k++)nd[k]+=this.weights[l][j][k]*delta[j];
+        delta=nd.map((d,k)=>d*this.actDeriv(this.zValues[l-1][k]));
+      }
+    }
+  }
+  trainOne(input,target,lr){
+    const pred=this.forward(input),eps=1e-7,p=Math.max(eps,Math.min(1-eps,pred));
+    const loss=-(target*Math.log(p)+(1-target)*Math.log(1-p));
+    this.backward(target,lr);return loss;
+  }
+}
+
+// ── State ────────────────────────────────────────────────────
+let dataPoints=[],net=null,netB=null,isTraining=false,rafId=null;
+let epoch=0,epochB=0,lossHistory=[],lossHistoryB=[];
+let bestLoss=Infinity,bestLossB=Infinity;
+let bestWeights=null,bestBiases=null,bestWeightsB=null,bestBiasesB=null;
+let currentDatasetType=null,gridCache=null,gridCacheB=null;
+const MAX_LOSS_HISTORY=500,GRID_SIZE=50;
+
+// ── Element refs ─────────────────────────────────────────────
+const layersVal=document.getElementById('layersVal'),neuronsVal=document.getElementById('neuronsVal');
+const activationSelect=document.getElementById('activationSelect'),lrSelect=document.getElementById('lrSelect');
+const optimizerSelect=document.getElementById('optimizerSelect'),batchSelect=document.getElementById('batchSelect');
+const layersValB=document.getElementById('layersValB'),neuronsValB=document.getElementById('neuronsValB');
+const activationSelectB=document.getElementById('activationSelectB'),lrSelectB=document.getElementById('lrSelectB');
+const optimizerSelectB=document.getElementById('optimizerSelectB'),batchSelectB=document.getElementById('batchSelectB');
+const speedSelect=document.getElementById('speedSelect');
+const trainBtn=document.getElementById('trainBtn'),stopBtn=document.getElementById('stopBtn'),stepBtn=document.getElementById('stepBtn');
+const loadBestBtn=document.getElementById('loadBestBtn'),loadBestBtnB=document.getElementById('loadBestBtnB');
+const statusBadge=document.getElementById('statusBadge');
+const epochDisplay=document.getElementById('epochDisplay'),lossDisplay=document.getElementById('lossDisplay');
+const bestLossBar=document.getElementById('bestLossBar'),accuracyDisplay=document.getElementById('accuracyDisplay');
+const epochDisplayB=document.getElementById('epochDisplayB'),lossDisplayB=document.getElementById('lossDisplayB');
+const bestLossBarB=document.getElementById('bestLossBarB'),accuracyDisplayB=document.getElementById('accuracyDisplayB');
+const noiseSlider=document.getElementById('noiseSlider'),noiseVal=document.getElementById('noiseVal');
+const lossPlaceholder=document.getElementById('lossPlaceholder'),lossPlaceholderB=document.getElementById('lossPlaceholderB');
+const archDisplayA=document.getElementById('archDisplayA'),archDisplayB=document.getElementById('archDisplayB');
+const canvasContainer=document.getElementById('canvasContainer'),canvasContainerB=document.getElementById('canvasContainerB');
+const mainCanvas=document.getElementById('mainCanvas'),mainCanvasB=document.getElementById('mainCanvasB');
+const lossCanvas=document.getElementById('lossCanvas'),lossCanvasB=document.getElementById('lossCanvasB');
+const lossCanvasWrap=document.getElementById('lossCanvasWrap'),lossCanvasWrapB=document.getElementById('lossCanvasWrapB');
+
+// ── Best weights ─────────────────────────────────────────────
+function saveBestWeights(){bestWeights=net.weights.map(W=>W.map(r=>[...r]));bestBiases=net.biases.map(b=>[...b]);loadBestBtn.disabled=false;}
+function loadBestWeights(){if(!bestWeights)return;net.weights=bestWeights.map(W=>W.map(r=>[...r]));net.biases=bestBiases.map(b=>[...b]);gridCache=null;drawMain();}
+function saveBestWeightsB(){bestWeightsB=netB.weights.map(W=>W.map(r=>[...r]));bestBiasesB=netB.biases.map(b=>[...b]);loadBestBtnB.disabled=false;}
+function loadBestWeightsB(){if(!bestWeightsB)return;netB.weights=bestWeightsB.map(W=>W.map(r=>[...r]));netB.biases=bestBiasesB.map(b=>[...b]);gridCacheB=null;drawMainB();}
+
+// ── Steppers ─────────────────────────────────────────────────
+function stepValue(id,d,mn,mx){const el=document.getElementById(id);el.textContent=Math.max(mn,Math.min(mx,parseInt(el.textContent)+d));onModelChange();}
+function stepValueB(id,d,mn,mx){const el=document.getElementById(id);el.textContent=Math.max(mn,Math.min(mx,parseInt(el.textContent)+d));buildNetworkB();}
+function getArchString(l,n){return[2,...new Array(parseInt(l)).fill(parseInt(n)),1].join('→');}
+
+// ── Network builders ─────────────────────────────────────────
+function buildNetwork(){
+  const l=parseInt(layersVal.textContent),n=parseInt(neuronsVal.textContent);
+  net=new MLP([2,...new Array(l).fill(n),1],activationSelect.value,optimizerSelect.value);
+  epoch=0;lossHistory=[];gridCache=null;bestLoss=Infinity;bestWeights=null;bestBiases=null;
+  loadBestBtn.disabled=true;bestLossBar.textContent='—';updateEpochLoss(null,null,null);
+  drawLossChart();archDisplayA.textContent=getArchString(l,n);
+}
+function onModelChange(){buildNetwork();drawMain();}
+
+function buildNetworkB(){
+  const l=parseInt(layersValB.textContent),n=parseInt(neuronsValB.textContent);
+  netB=new MLP([2,...new Array(l).fill(n),1],activationSelectB.value,optimizerSelectB.value);
+  epochB=0;lossHistoryB=[];gridCacheB=null;bestLossB=Infinity;bestWeightsB=null;bestBiasesB=null;
+  loadBestBtnB.disabled=true;bestLossBarB.textContent='—';updateEpochLossB(null,null,null);
+  drawLossChartB();archDisplayB.textContent=getArchString(l,n);
+}
+
+// ── Sync A↔B ─────────────────────────────────────────────────
+function syncBtoA(){  // Copy A → B
+  layersValB.textContent=layersVal.textContent;neuronsValB.textContent=neuronsVal.textContent;
+  activationSelectB.value=activationSelect.value;lrSelectB.value=lrSelect.value;
+  optimizerSelectB.value=optimizerSelect.value;batchSelectB.value=batchSelect.value;
+  buildNetworkB();
+}
+function syncAtoB(){  // Copy B → A
+  layersVal.textContent=layersValB.textContent;neuronsVal.textContent=neuronsValB.textContent;
+  activationSelect.value=activationSelectB.value;lrSelect.value=lrSelectB.value;
+  optimizerSelect.value=optimizerSelectB.value;batchSelect.value=batchSelectB.value;
+  onModelChange();
+}
+
+// ── Noise & Dataset ──────────────────────────────────────────
+function getNoise(){return parseInt(noiseSlider.value)/100;}
+function onNoiseChange(){noiseVal.textContent=noiseSlider.value+'%';if(currentDatasetType)loadDataset(currentDatasetType,true);}
+function rand(a,b){return a+Math.random()*(b-a);}
+
+function loadDataset(type,skipRebuild){
+  currentDatasetType=type;dataPoints=[];const noise=getNoise();
+  if(type==='linear')for(let i=0;i<80;i++){const x=rand(-.95,.95),y=rand(-.95,.95);dataPoints.push({x,y,label:x+y+randn()*noise*2>0?1:0});}
+  else if(type==='circle')for(let i=0;i<80;i++){const r=rand(0,.95),theta=rand(0,2*Math.PI),nr=r+randn()*noise*.5;dataPoints.push({x:r*Math.cos(theta),y:r*Math.sin(theta),label:nr<.5?0:1});}
+  else if(type==='spiral')for(let i=0;i<40;i++){const t=i/40*4*Math.PI,r=.1+i/40*.85,nx=randn()*noise*.5,ny=randn()*noise*.5;dataPoints.push({x:r*Math.cos(t)+nx,y:r*Math.sin(t)+ny,label:0});dataPoints.push({x:r*Math.cos(t+Math.PI)+nx,y:r*Math.sin(t+Math.PI)+ny,label:1});}
+  if(!skipRebuild){buildNetwork();buildNetworkB();}
+  else{
+    epoch=0;lossHistory=[];gridCache=null;bestLoss=Infinity;bestWeights=null;bestBiases=null;
+    loadBestBtn.disabled=true;bestLossBar.textContent='—';updateEpochLoss(null,null,null);drawLossChart();net.initWeights();
+    epochB=0;lossHistoryB=[];gridCacheB=null;bestLossB=Infinity;bestWeightsB=null;bestBiasesB=null;
+    loadBestBtnB.disabled=true;bestLossBarB.textContent='—';updateEpochLossB(null,null,null);drawLossChartB();netB.initWeights();
+  }
+  drawMain();drawMainB();
+}
+
+function clearData(){dataPoints=[];currentDatasetType=null;buildNetwork();buildNetworkB();drawMain();drawMainB();}
+
+// ── Accuracy & Training Epoch ────────────────────────────────
+function computeAccuracy(network){
+  if(!network||!dataPoints.length)return null;
+  let c=0;for(const pt of dataPoints)if((network.forward([pt.x,pt.y])>=.5?1:0)===pt.label)c++;
+  return c/dataPoints.length*100;
+}
+function trainEpoch(bs,lr,network){
+  const n=dataPoints.length;if(!n)return 0;
+  const idx=Array.from({length:n},(_,i)=>i);
+  for(let i=n-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[idx[i],idx[j]]=[idx[j],idx[i]];}
+  let total=0;
+  if(bs>=n)for(const i of idx){const p=dataPoints[i];total+=network.trainOne([p.x,p.y],p.label,lr);}
+  else for(let b=0;b<Math.ceil(n/bs);b++)for(const i of idx.slice(b*bs,(b+1)*bs)){const p=dataPoints[i];total+=network.trainOne([p.x,p.y],p.label,lr);}
+  return total/n;
+}
+function getBatchSize(){return batchSelect.value==='all'?Infinity:parseInt(batchSelect.value);}
+function getBatchSizeB(){return batchSelectB.value==='all'?Infinity:parseInt(batchSelectB.value);}
+
+// ── Metrics update ───────────────────────────────────────────
+function updateEpochLoss(e,l,a){epochDisplay.textContent=e===null?'—':e.toLocaleString();lossDisplay.textContent=l===null?'—':l.toFixed(4);accuracyDisplay.textContent=a===null?'—':a.toFixed(1)+'%';}
+function updateEpochLossB(e,l,a){epochDisplayB.textContent=e===null?'—':e.toLocaleString();lossDisplayB.textContent=l===null?'—':l.toFixed(4);accuracyDisplayB.textContent=a===null?'—':a.toFixed(1)+'%';}
+
+// ── Training control ─────────────────────────────────────────
+function startTraining(){
+  // Validate data
+  if(dataPoints.length<4){alert('Please add at least 4 data points before training.\n\nLeft-click = Class 0 (red)\nRight-click = Class 1 (blue)\n\nOr use a preset dataset above.');return;}
+  if(!dataPoints.some(p=>p.label===0)||!dataPoints.some(p=>p.label===1)){alert('Both classes are required.\nLeft-click for Class 0 (red), right-click for Class 1 (blue).');return;}
+  if(!net)buildNetwork();if(!netB)buildNetworkB();
+  isTraining=true;trainBtn.disabled=true;stopBtn.disabled=false;stepBtn.disabled=true;
+  statusBadge.innerHTML='<span class="status-dot"></span>Training';statusBadge.className='badge badge-training';
+  lossPlaceholder.style.display=lossPlaceholderB.style.display='none';
+  trainLoop();
+}
+function stopTraining(){
+  isTraining=false;if(rafId)cancelAnimationFrame(rafId);rafId=null;
+  trainBtn.disabled=false;stopBtn.disabled=true;stepBtn.disabled=false;
+  statusBadge.innerHTML='<span class="status-dot"></span>Stopped';statusBadge.className='badge badge-stopped';
+}
+function resetWeights(){
+  net.initWeights();netB.initWeights();
+  epoch=epochB=0;lossHistory=[];lossHistoryB=[];gridCache=gridCacheB=null;
+  bestLoss=bestLossB=Infinity;bestWeights=bestBiases=bestWeightsB=bestBiasesB=null;
+  loadBestBtn.disabled=loadBestBtnB.disabled=true;bestLossBar.textContent=bestLossBarB.textContent='—';
+  updateEpochLoss(null,null,null);updateEpochLossB(null,null,null);
+  drawMain();drawMainB();drawLossChart();drawLossChartB();
+}
+function stepOnce(){
+  if(dataPoints.length<4){alert('Add at least 4 data points first.');return;}
+  if(!dataPoints.some(p=>p.label===0)||!dataPoints.some(p=>p.label===1)){alert('Both classes are required.');return;}
+  if(!net)buildNetwork();if(!netB)buildNetworkB();
+  lossPlaceholder.style.display=lossPlaceholderB.style.display='none';
+  // Step A
+  const a=trainEpoch(getBatchSize(),+lrSelect.value,net);epoch++;lossHistory.push(a);
+  if(a<bestLoss){bestLoss=a;saveBestWeights();bestLossBar.textContent=a.toFixed(4);}
+  updateEpochLoss(epoch,a,computeAccuracy(net));gridCache=null;drawMain();drawLossChart();
+  // Step B
+  const b=trainEpoch(getBatchSizeB(),+lrSelectB.value,netB);epochB++;lossHistoryB.push(b);
+  if(b<bestLossB){bestLossB=b;saveBestWeightsB();bestLossBarB.textContent=b.toFixed(4);}
+  updateEpochLossB(epochB,b,computeAccuracy(netB));gridCacheB=null;drawMainB();drawLossChartB();
+}
+function trainLoop(){
+  if(!isTraining)return;const speed=+speedSelect.value;
+  for(let e=0;e<speed;e++){const a=trainEpoch(getBatchSize(),+lrSelect.value,net);epoch++;lossHistory.push(a);if(lossHistory.length>MAX_LOSS_HISTORY)lossHistory.shift();if(a<bestLoss){bestLoss=a;saveBestWeights();bestLossBar.textContent=a.toFixed(4);}}
+  updateEpochLoss(epoch,lossHistory.at(-1),computeAccuracy(net));gridCache=null;drawMain();drawLossChart();
+  for(let e=0;e<speed;e++){const b=trainEpoch(getBatchSizeB(),+lrSelectB.value,netB);epochB++;lossHistoryB.push(b);if(lossHistoryB.length>MAX_LOSS_HISTORY)lossHistoryB.shift();if(b<bestLossB){bestLossB=b;saveBestWeightsB();bestLossBarB.textContent=b.toFixed(4);}}
+  updateEpochLossB(epochB,lossHistoryB.at(-1),computeAccuracy(netB));gridCacheB=null;drawMainB();drawLossChartB();
+  rafId=requestAnimationFrame(trainLoop);
+}
+
+// ── Canvas rendering ─────────────────────────────────────────
+const mainCtx=mainCanvas.getContext('2d'),mainCtxB=mainCanvasB.getContext('2d');
+function resizeMainCanvas(){if(mainCanvas.width!==canvasContainer.clientWidth||mainCanvas.height!==canvasContainer.clientHeight){mainCanvas.width=canvasContainer.clientWidth;mainCanvas.height=canvasContainer.clientHeight;gridCache=null;drawMain();}}
+function resizeMainCanvasB(){if(mainCanvasB.width!==canvasContainerB.clientWidth||mainCanvasB.height!==canvasContainerB.clientHeight){mainCanvasB.width=canvasContainerB.clientWidth;mainCanvasB.height=canvasContainerB.clientHeight;gridCacheB=null;drawMainB();}}
+
+function lerpColor(r1,g1,b1,r2,g2,b2,t){return[Math.round(r1+(r2-r1)*t),Math.round(g1+(g2-g1)*t),Math.round(b1+(b2-b1)*t)];}
+
+function drawDecisionBoundary(canvas,ctx,network,cache,setCache){
+  const w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='#050810';ctx.fillRect(0,0,w,h);
+  if(network&&w>0&&h>0){
+    if(!cache){
+      cache=new Float32Array(GRID_SIZE*GRID_SIZE);
+      for(let gy=0;gy<GRID_SIZE;gy++)for(let gx=0;gx<GRID_SIZE;gx++)cache[gy*GRID_SIZE+gx]=network.forward([gx/(GRID_SIZE-1)*2-1,-(gy/(GRID_SIZE-1)*2-1)]);
+      setCache(cache);
+    }
+    const img=ctx.createImageData(w,h),data=img.data;
+    for(let py=0;py<h;py++)for(let px=0;px<w;px++){
+      const gxF=px/w*(GRID_SIZE-1),gyF=py/h*(GRID_SIZE-1),gx0=Math.min(Math.floor(gxF),GRID_SIZE-2),gy0=Math.min(Math.floor(gyF),GRID_SIZE-2),tx=gxF-gx0,ty=gyF-gy0;
+      const p=cache[gy0*GRID_SIZE+gx0]*(1-tx)*(1-ty)+cache[gy0*GRID_SIZE+gx0+1]*tx*(1-ty)+cache[(gy0+1)*GRID_SIZE+gx0]*(1-tx)*ty+cache[(gy0+1)*GRID_SIZE+gx0+1]*tx*ty;
+      let r,g,b;if(p<.5)[r,g,b]=lerpColor(200,55,60,195,195,195,p/.5);else[r,g,b]=lerpColor(195,195,195,45,100,230,(p-.5)/.5);
+      const i=(py*w+px)*4;data[i]=r;data[i+1]=g;data[i+2]=b;data[i+3]=210;
+    }
+    ctx.putImageData(img,0,0);
+  }
+  ctx.strokeStyle='rgba(255,255,255,.1)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,h);ctx.stroke();
+  for(const p of dataPoints){
+    const x=(p.x+1)/2*w,y=(1-(p.y+1)/2)*h;
+    ctx.beginPath();ctx.arc(x,y,5.5,0,2*Math.PI);
+    ctx.fillStyle=p.label?'#3070e0':'#e04040';ctx.strokeStyle=p.label?'#6098f5':'#ff7070';
+    ctx.lineWidth=1.5;ctx.fill();ctx.stroke();
+  }
+}
+function drawMain(){drawDecisionBoundary(mainCanvas,mainCtx,net,gridCache,c=>gridCache=c);}
+function drawMainB(){drawDecisionBoundary(mainCanvasB,mainCtxB,netB,gridCacheB,c=>gridCacheB=c);}
+
+function addPoint(canvas,e,label){
+  const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/canvas.width*2-1,y=-((e.clientY-r.top)/canvas.height*2-1);
+  dataPoints.push({x,y,label});gridCache=gridCacheB=null;drawMain();drawMainB();
+}
+mainCanvas.onclick=e=>addPoint(mainCanvas,e,0);
+mainCanvas.oncontextmenu=e=>{e.preventDefault();addPoint(mainCanvas,e,1)};
+mainCanvasB.onclick=e=>addPoint(mainCanvasB,e,0);
+mainCanvasB.oncontextmenu=e=>{e.preventDefault();addPoint(mainCanvasB,e,1)};
+
+// ── Loss charts ──────────────────────────────────────────────
+const lossCtx=lossCanvas.getContext('2d'),lossCtxB=lossCanvasB.getContext('2d');
+function resizeLossCanvas(){if(lossCanvas.width!==lossCanvasWrap.clientWidth||lossCanvas.height!==lossCanvasWrap.clientHeight){lossCanvas.width=lossCanvasWrap.clientWidth;lossCanvas.height=lossCanvasWrap.clientHeight;drawLossChart();}}
+function resizeLossCanvasB(){if(lossCanvasB.width!==lossCanvasWrapB.clientWidth||lossCanvasB.height!==lossCanvasWrapB.clientHeight){lossCanvasB.width=lossCanvasWrapB.clientWidth;lossCanvasB.height=lossCanvasWrapB.clientHeight;drawLossChartB();}}
+
+function drawLossChartGeneric(c,x,h,line,top,bot){
+  const w=c.width,y=c.height;x.clearRect(0,0,w,y);x.fillStyle='#111827';x.fillRect(0,0,w,y);
+  if(h.length<2)return;
+  const pad={t:10,r:12,b:8,l:4},cw=w-pad.l-pad.r,ch=y-pad.t-pad.b;
+  x.strokeStyle='rgba(42,53,80,.9)';x.lineWidth=1;
+  for(const v of[.25,.5,.75]){const py=pad.t+(1-v)*ch;x.beginPath();x.moveTo(pad.l,py);x.lineTo(pad.l+cw,py);x.stroke();}
+  const pts=h.map((v,i)=>[pad.l+i/(MAX_LOSS_HISTORY-1)*cw,pad.t+(1-Math.max(0,Math.min(1,v)))*ch]);
+  x.beginPath();x.moveTo(pts[0][0],pad.t+ch);pts.forEach(p=>x.lineTo(...p));x.lineTo(pts.at(-1)[0],pad.t+ch);x.closePath();
+  const g=x.createLinearGradient(0,pad.t,0,pad.t+ch);g.addColorStop(0,top);g.addColorStop(1,bot);x.fillStyle=g;x.fill();
+  x.beginPath();pts.forEach((p,i)=>i?x.lineTo(...p):x.moveTo(...p));x.strokeStyle=line;x.lineWidth=1.5;x.stroke();
+  x.beginPath();x.arc(...pts.at(-1),3,0,2*Math.PI);x.fillStyle=line;x.fill();
+}
+function drawLossChart(){drawLossChartGeneric(lossCanvas,lossCtx,lossHistory,'#34d058','rgba(52,208,88,.3)','rgba(52,208,88,.03)');}
+function drawLossChartB(){drawLossChartGeneric(lossCanvasB,lossCtxB,lossHistoryB,'#f5a623','rgba(245,166,35,.3)','rgba(245,166,35,.03)');}
+
+// ── Auto best params ─────────────────────────────────────────
+const AUTO_CONFIGS={
+  linear: {layers:1,neurons:4,activation:'relu',lr:'0.01',optimizer:'sgd',batch:'all',note:'Linear: 1 layer, SGD — simple boundary'},
+  circle: {layers:2,neurons:6,activation:'relu',lr:'0.01',optimizer:'adam',batch:'all',note:'Circles: 2 layers, Adam — circular boundary'},
+  spiral: {layers:3,neurons:8,activation:'tanh',lr:'0.005',optimizer:'adam',batch:'16',note:'Spiral: 3 layers, Tanh, Adam lr=0.005 — complex boundary'},
+  default:{layers:2,neurons:6,activation:'relu',lr:'0.01',optimizer:'adam',batch:'all',note:'General: 2 layers, Adam'}
+};
+
+function autoSetParams(model){
+  const c=AUTO_CONFIGS[currentDatasetType]||AUTO_CONFIGS.default,s=model==='a'?'':'B';
+  document.getElementById('layersVal'+s).textContent=c.layers;
+  document.getElementById('neuronsVal'+s).textContent=c.neurons;
+  document.getElementById('activationSelect'+s).value=c.activation;
+  document.getElementById('lrSelect'+s).value=c.lr;
+  document.getElementById('optimizerSelect'+s).value=c.optimizer;
+  document.getElementById('batchSelect'+s).value=c.batch;
+  const t=document.getElementById('autoToast'+model.toUpperCase());
+  t.textContent='✦ '+c.note;t.style.display='block';
+  clearTimeout(t._timer);t._timer=setTimeout(()=>t.style.display='none',4000);
+  model==='a'?onModelChange():buildNetworkB();
+}
+
+// ── Resize observer ──────────────────────────────────────────
+if(window.ResizeObserver)new ResizeObserver(()=>{resizeMainCanvas();resizeLossCanvas();resizeMainCanvasB();resizeLossCanvasB();}).observe(document.body);
+else window.onresize=()=>{resizeMainCanvas();resizeLossCanvas();resizeMainCanvasB();resizeLossCanvasB();};
+
+// ── Init ─────────────────────────────────────────────────────
+buildNetwork();buildNetworkB();
+requestAnimationFrame(()=>{resizeMainCanvas();resizeLossCanvas();resizeMainCanvasB();resizeLossCanvasB();});
+</script>
+</body>
+</html>
